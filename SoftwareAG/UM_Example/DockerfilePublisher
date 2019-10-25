@@ -1,0 +1,10 @@
+FROM java:8
+
+WORKDIR /
+
+ADD JavaPublisher.jar JavaPublisher.jar
+
+
+CMD java -jar JavaPublisher.jar
+
+
