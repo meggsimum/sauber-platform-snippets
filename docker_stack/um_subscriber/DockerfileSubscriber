@@ -1,0 +1,8 @@
+FROM java:8
+
+WORKDIR /
+
+ADD resources/JavaSubscriber.jar JavaSubscriber.jar
+
+
+CMD java -jar JavaSubscriber.jar
