@@ -2,17 +2,21 @@ version: "3.7"
 
 networks:
     network:
+        attachable: true
 
 volumes:
     db_data:
     lubw_data:
     geoserver_data:
     um_data:
+    um_logs:
+    um_licence:
+    um_users:
 
 secrets:
     postgis_user:
         file: ./secrets/postgis_user.txt
-        name: pg-user-v2
+        name: pg-user-v3
     postgis_password:
         file: ./secrets/postgis_password.txt
         name: pg-passw-v2
@@ -46,7 +50,7 @@ secrets:
 
 services:
     db:
-        image: "pgsql_ts_gis:2"
+        image: "sauber_postgis_alpine"
         networks:
             - network
         volumes:
@@ -60,13 +64,18 @@ services:
             - PGRST_PASSWORD_FILE=/run/secrets/postgrest_password
             - PGRST_JWT_SECRET_FILE=/run/secrets/postgrest_jwt_secret
             - SAUBER_MANAGER_PASSWORD_FILE=/run/secrets/sauber_manager_password
-            - SAUBER_USER_PASSWORD_FILE=/run/secrets/sauber_user_password            
+            - SAUBER_USER_PASSWORD_FILE=/run/secrets/sauber_user_password
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U postgres"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
         deploy:
             replicas: 1
             restart_policy:
                 condition: on-failure
         ports:
-            - "5432:5432"
+            - "5440:5432"
 
     lubw_download:
         image: "lubw_import:latest"
@@ -89,10 +98,12 @@ services:
         deploy:
             replicas: 1
             restart_policy:
-                condition: on-failure              
+                condition: on-failure
+        depends_on:
+            - db              
 
     geoserver:
-        image: "sauber_geoserver"
+        image: "meggsimum/geoserver"
         networks:
             - network 
         secrets:
@@ -110,11 +121,13 @@ services:
             replicas: 1
             restart_policy:
                 condition: on-failure
+        depends_on:
+            - db
         ports:
             - "8088:8080"
 
 
-    postgrest_sauber:
+    postgrest_lubw:
         image: "postgrest:latest"
         networks:
             - network
@@ -177,22 +190,27 @@ services:
              condition: on-failure
         # depends_on:
         # healthcheck:
-        ports:
-            - "9876:9000"
         volumes:
             - um_data:/opt/softwareag/UniversalMessaging/server/umserver/data
+            - um_logs:/opt/softwareag/UniversalMessaging/server/umserver/logs
+            - um_licence:/opt/softwareag/UniversalMessaging/server/umserver/licence
+            - um_users:/opt/softwareag/common/conf
+        ports:
+            - "9876:9000"
 
-    um_subscriber:
-        image: "java-subscribe"
-        networks:
-            - network
-        # secrets:
-        volumes:
-            - /var/run/docker.sock:/var/run/docker.sock
-        environment:
-            - umserver=um_server:9000
-        deploy:
-            restart_policy:
-                condition: on-failure
-        depends_on:
-            - um_server
+    # um_subscriber:
+    #     image: "java-subscribe-download:latest"
+    #     networks:
+    #         - network
+    #     # secrets:
+    #     volumes:
+    #         - /var/run/docker.sock:/var/run/docker.sock
+    #     environment:
+    #         - umserver=um_server:9000
+    #     deploy:
+    #         restart_policy:
+    #             condition: on-failure
+    #     depends_on:
+    #         - um_server
+    #     tty:
+    #         true  #Keep Container alive, else completes and shuts down

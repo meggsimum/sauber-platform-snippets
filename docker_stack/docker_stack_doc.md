@@ -84,5 +84,9 @@
 ### Universal Messaging Server
 
 ### Universal Messaging Subscriber
+    
+    In bisheriger Form (Container nur mit jar) per tty-Flag offengehalten.
 
-    Container wird als completed beendet? 
+    Log Clutter durch fehlgeschlagene Verbindungen bis UM Server gestartet ist. Todo: wait-for-it Script.
+
+    Läd noch jede Datei herunter, die in Publisher event data als Value von "url" vorhanden ist. Todo: UM channel sichern. 

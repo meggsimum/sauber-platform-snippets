@@ -27,9 +27,9 @@ file_env() {
 #Read docker secrets. 
 secrets=(
     SAUBER_MANAGER_PASSWORD
-    FTP_USER
-    FTP_PASSWORD
-    FTP_SERVER
+    LUBW_USER
+    LUBW_PASSWORD
+    LUBW_SERVER
 )
 
 for e in "${secrets[@]}"; do
@@ -41,9 +41,9 @@ envs=(
 	POSTGIS_HOSTNAME
 	LUBW_DATABASE
     SAUBER_MANAGER_PASSWORD
-	FTP_USER
-	FTP_PASSWORD
-    FTP_SERVER
+	LUBW_USER
+	LUBW_PASSWORD
+    LUBW_SERVER
 )
 
 for e in "${envs[@]}"; do
@@ -63,7 +63,7 @@ PARSED_OUTFILE=lubw_$(TZ=Europe/Berlin date +%Y%m%d%H%M).xml
 
 
 # Download xml file from server. Exit if curl throws failure (http response!=2xx) 
-if curl --fail -u $FTP_USER:$FTP_PASSWORD $FTP_SERVER -o $OUTDIR/$OUTFILE; 
+if curl --fail -u $LUBW_USER:$LUBW_PASSWORD $LUBW_SERVER -o $OUTDIR/$OUTFILE; 
 then
     echo "Datei $PARSED_OUTFILE heruntergeladen."
 else

@@ -2,7 +2,7 @@ FROM java:8
 
 WORKDIR /
 
-ADD resources/JavaSubscriberEdited.jar JavaSubscriber.jar
+ADD JavaSubscriberEdited.jar JavaSubscriber.jar
 
 
 CMD java -jar JavaSubscriber.jar
