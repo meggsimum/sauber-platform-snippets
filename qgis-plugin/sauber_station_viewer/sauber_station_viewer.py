@@ -287,15 +287,17 @@ class SauberStationViewer:
             iface.messageBar().pushMessage("Error", "Abfragezeitraum ist null", level=Qgis.Critical, duration=4)
             return
 
-        # Strip quotes from component 
-        component_name = self.dlg.box_pollutant.currentText().replace('"', '')
+        # Get current station + comp from UI
         station_name = self.dlg.box_station.currentText()
+        component_name = self.dlg.box_pollutant.currentText().replace('"', '')
+
 
         base_url = "https://sauber-sdi.meggsimum.de/geoserver/station_data/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=station_data%3Awfs_parameterized&outputFormat=application%2Fjson"
-        request_url = base_url + "&viewparams=START_DATE:"+start_dt+";END_DATE:"+end_dt+";STATION_NAME:"+station_name+";COMPONENT_NAME:"+component_name
+        request_url = base_url + "&viewparams=START_DATE:'{}';END_DATE:'{}';STATION_NAME:'{}';COMPONENT_NAME:'{}'".format(start_dt,end_dt,station_name,component_name)
 
         try:
             request = requests.get(request_url, verify=False)#,auth)) # TODO: Enable auth, TODO: turn on cert verification
+            request.raise_for_status()
             station_data = request.text
         except HTTPError as http_err:
             print(f'HTTP error: {http_err}')
@@ -325,7 +327,7 @@ class SauberStationViewer:
             data=[]
             for i in series:
                 data.append((datetime.strptime(i["datetime"],"%Y-%m-%dT%H:%M:%S"),(i["val"])))    
-            return data 
+            return data, station_name, component_name
 
         else:
             iface.messageBar().pushMessage("Error", "Keine Daten im Abfragezeitraum", level=Qgis.Critical, duration=4)
@@ -334,10 +336,10 @@ class SauberStationViewer:
     def pushToTable(self):
         """Insert data into table wdiget"""
 
-        data_float = self.loadStationData()
+        data_float,station,component = self.loadStationData()
 
         # data = tuple((x[0],str(x[1])) for x in data_float)
-        data = tuple((x[0],str(round(x[1]))) for x in data_float)
+        data = tuple((x[0],str(round(x[1],2))) for x in data_float)
 
         # Construct table
         qTable = self.dlg.tableWidget
@@ -355,6 +357,8 @@ class SauberStationViewer:
                     qTable.setItem(row, column, QTableWidgetItem((data[row][column].strftime('%d.%m.%Y %H:%M'))))
                 else:
                     qTable.setItem(row, column, QTableWidgetItem((data[row][column])))
+
+        qTable.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
         qTable.resizeColumnsToContents()
 
 
@@ -364,13 +368,15 @@ class SauberStationViewer:
         stations_url = 'https://sauber-sdi.meggsimum.de/geoserver/station_data/ows?service=WFS&version=2.0.0&request=GetFeature&typeName=station_data:fv_stations&outputFormat=application/json'
 
         try:
-            station_pollutants = requests.get(stations_url, verify=False)#,auth)) # TODO: Enable auth, TODO: turn on cert verification
+            station_pollutants = requests.get(stations_url)#,auth)) # TODO: Enable auth, TODO: turn on cert verification
+            station_pollutants.raise_for_status()
             station_response = station_pollutants.text
         except HTTPError as http_err:
             print(f'HTTP error: {http_err}')
         except Exception as err:
             print(f'Error occurred: {err}')
 
+#        print(station_pollutants)
         # Parse reponse JSON and load into dict
         self.station_dict = json.loads(station_response)
 
@@ -379,13 +385,16 @@ class SauberStationViewer:
         for station in self.station_dict["features"]:
             stations.append(station["properties"]["station_name"]) if station["properties"]["station_name"] not in stations else stations
 
+        stations = [x for x in stations if x is not None]
+#        print(stations)
         # Sort for ordering in gui box
         stations.sort()
     
         # push to combobox
         self.dlg.box_station.clear()
         for i in stations:
-            self.dlg.box_station.addItem(i)
+            if i is not None:
+                self.dlg.box_station.addItem(i)
 
         # Call function for first iteration
         self.getCurrStation()
@@ -432,9 +441,9 @@ class SauberStationViewer:
 
     def plot(self):
         """Show graph of data. Calls Plotter class"""
-        data = self.loadStationData()
+        data,station_name,component_name = self.loadStationData()
         plt_inst = Plotter()
-        plt_inst.plot(data)
+        plt_inst.plot(data,station_name,component_name)
 
 
     def run(self):

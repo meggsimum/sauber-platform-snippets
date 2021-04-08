@@ -21,24 +21,18 @@
  *                                                                         *
  ***************************************************************************/
 """
-
 #TODO: Clean up imports
 from qgis.core import (
     Qgis,
     QgsProject, 
     QgsRasterLayer, 
-    QgsVectorLayer,
-    QgsRectangle, 
-    QgsPoint,
-    QgsWkbTypes
+    QgsRectangle 
+
 )
 
 from qgis.PyQt.QtWidgets import (
     QAction, 
     QInputDialog, 
-    QLineEdit, 
-    QLabel, 
-    QVBoxLayout,
     QWidget,
     QTableWidgetItem
 )
@@ -51,9 +45,9 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 import os.path
 import requests
-import json
 import xml.etree.ElementTree as ET
 from datetime import datetime
+from collections import defaultdict
 
 # Initialize Qt resources from file resources.py
 from .resources import *
@@ -234,33 +228,32 @@ class SauberRasterViewer:
         Load raster layer into map canvas
         """
 
-        curr_region = self.getCurrRegion()
-        curr_pollutant = self.getCurrRegionPollutant()
-
+        curr_region, curr_pollutant = self.getCurrCombo()
+        layer_name = "{0} {1}".format(curr_region.upper(),curr_pollutant.upper())
         timeframe = self.getMinMaxTime()
 
-        if curr_region and curr_pollutant:
+        wmst_url = "url=https://sauber-sdi.meggsimum.de/geoserver/image_mosaics/wms&crs=EPSG:25832&dpiMode=7&format=image/png&layers={0}_{1}&styles&temporalSource=provider&timeDimensionExtent={2}&type=wmst".format(curr_region,curr_pollutant,timeframe)            
+        
+        print(wmst_url)
+        raster_layer = QgsRasterLayer(wmst_url, layer_name, "WMS")
 
-            wmst_url = "url=https://sauber-sdi.meggsimum.de/geoserver/image_mosaics/wms&crs=EPSG:25832&dpiMode=7&format=image/png&layers={0}_{1}&styles&temporalSource=provider&timeDimensionExtent={2}&type=wmst".format(curr_region,curr_pollutant,timeframe)            
-            
-            raster_layer = QgsRasterLayer(wmst_url, "{0} {1}".format(curr_region.upper(),curr_pollutant.upper()), "WMS")
+        if self.checkLayerExists(wmst_url):
+            if raster_layer.isValid():
+                QgsProject.instance().addMapLayer(raster_layer)
+            else: iface.messageBar().pushMessage("Error", "Raster Layer konnte nicht geladen werden", level=Qgis.Critical, duration=4)
+            return
+        elif warning==True: 
+            iface.messageBar().pushMessage("Hinweis", "Raster Layer {} bereits geladen".format(layer_name), level=Qgis.Info, duration=4)
+            return
 
-            if self.checkLayerExists(wmst_url):
-                if raster_layer.isValid():
-                    QgsProject.instance().addMapLayer(raster_layer)
-                else: iface.messageBar().pushMessage("Error", "Raster Layer konnte nicht geladen werden", level=Qgis.Critical, duration=4)
-                return
-            elif warning==True: 
-                iface.messageBar().pushMessage("Hinweis", "Raster Layer bereits geladen", level=Qgis.Info, duration=4)
-                return
-
-            # Get Layer ID, set active and visible 
-            layer = QgsProject.instance().mapLayersByName("{0} {1}".format(curr_region.upper(),curr_pollutant.upper()))[0]
-            iface.setActiveLayer(layer)
-            QgsProject.instance().layerTreeRoot().findLayer(layer).setItemVisibilityChecked(True)
+        # Get Layer ID, set active and visible 
+        layer = QgsProject.instance().mapLayersByName(layer_name)[0]
+        iface.setActiveLayer(layer)
+        QgsProject.instance().layerTreeRoot().findLayer(layer).setItemVisibilityChecked(True)
 
 
     def getCapabilitiesFile(self):
+        """ Download getCap File"""
 
         capabilities_url = "https://sauber-sdi.meggsimum.de/geoserver/image_mosaics/wms?service=WMS&version=1.1.0&request=GetCapabilities"
 
@@ -273,17 +266,17 @@ class SauberRasterViewer:
             print(f'Error occurred: {err}')
             iface.messageBar().pushMessage("Error", "Raster Capabilities konnten nicht heruntergeladen werden", level=Qgis.Critical, duration=4)
 
-        self.capabilities_root = ET.fromstring(capabilities_text)  
+        capabilities_root = ET.fromstring(capabilities_text)  
+
+        self.getRasterLayerDict(capabilities_root)
 
 
     def getMinMaxTime(self):
+        """ Retrieve min and max time for raster mosaic"""
 
-        curr_region = self.getCurrRegion()
-        curr_pollutant = self.getCurrRegionPollutant()
+        curr_region, curr_pollutant = self.getCurrCombo()
 
-        # Match Getcap with selected region and pollutant
-        for child in self.capabilities_root.findall("./Capability/Layer/Layer[Name='{0}']/Extent".format(str(curr_region+'_'+curr_pollutant))):
-            timeframe = child.text
+        timeframe = self.raster_dict[curr_region][curr_pollutant]
 
         min_time = timeframe.split("/")[0]
         max_time = timeframe.split("/")[1]
@@ -297,60 +290,51 @@ class SauberRasterViewer:
         return timeframe
 
 
-    def getRasterLayerCombo(self):
+    def getRasterLayerDict(self,xml_root):
+        """Iterate through getCap XML and create dict of region:pollutants:timeframe""" 
+            
+        self.raster_dict = defaultdict(dict)
+
+        for layer in xml_root.findall("./Capability/Layer/Layer/Name"):
+            lyr_txt = layer.text
+            # Split layer name by underscore, max splits = 1
+            region = lyr_txt.split("_",1)[0]
+            pollutant = lyr_txt.split("_",1)[1]
+            # Iterate possible time frames of layers 
+            for timeframe in xml_root.findall("./Capability/Layer/Layer[Name='{0}']/Extent".format(lyr_txt)):
+                timeframe_txt = timeframe.text
+                # Add to dict
+                self.raster_dict[region].update({pollutant:timeframe_txt})
         
-        combo_url = "https://sauber-sdi.meggsimum.de/geoserver/image_mosaics/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=image_mosaics%3Afv_region_pollutants&outputFormat=application/json"
-
-        try:
-            raster_response = requests.get(combo_url, verify=False)#,auth)) # TODO: Enable auth, enable verifiy
-            raster_text = raster_response.text
-        except requests.exceptions.HTTPError as http_err:
-            print(f'HTTP error: {http_err}')
-        except Exception as err:
-            print(f'Error occurred: {err}')
-
-        self.raster_dict = json.loads(raster_text)
-
-        # Clear in case dlg gets called multiple times
-        regions = []
+        # clear combobox push regions
         self.dlg.box_region.clear()
-
-        # Iterate over dict and fill stations list 
-        for region in self.raster_dict["features"]:
-            regions.append(region["properties"]["region"]) if region["properties"]["region"] not in regions else regions
-
-        # Sort for ordering in gui box
-        regions.sort()
-
-        # push to combobox
-        for region in regions:
-            self.dlg.box_region.addItem(region)
+        for region in self.raster_dict.keys():
+            self.dlg.box_region.addItem(region.upper())
 
         # Call function for first iteration on startup
-        self.getCurrRegion()
+        self.filterRasterPollutants()
 
 
-    def getCurrRegion(self):
-        """ Listens to signal when station selection is changed in combobox """
-        curr_region = self.dlg.box_region.currentText()
-        self.filterRasterPollutants(self.dlg.box_region.currentText())
-        return curr_region
+    def getCurrCombo(self):
+         """ Retrieves current region, pollutant selection """
+
+         curr_region = self.dlg.box_region.currentText().lower()
+         curr_pollutant = self.dlg.box_raster_pollutant.currentText().lower()
+    
+         return curr_region, curr_pollutant
 
 
-    def getCurrRegionPollutant(self):
-        """Listens to signal when pollutant selection is changed in combobox"""
-        curr_raster_pollutant = self.dlg.box_raster_pollutant.currentText()
-        return curr_raster_pollutant
-
-
-    def filterRasterPollutants(self,region):
+    def filterRasterPollutants(self):
         """ Dict lookup: Find corresponding pollutants for selected station  """
+
+        curr_region, curr_pollutant = self.getCurrCombo()
         self.dlg.box_raster_pollutant.clear()
-        for i in self.raster_dict["features"]:
-            if i["properties"]["region"] == region:
-                pollutant = i["properties"]["pollutant"]
-                    # Remove curly brackets and split for insert into second combo box                    
-                self.dlg.box_raster_pollutant.addItem(pollutant.replace('"',''))
+        # Insert pollutants into UI box 
+        for pollutant in self.raster_dict[curr_region].keys():
+            self.dlg.box_raster_pollutant.addItem(pollutant.upper())
+
+        # Fill UI Datetime boxes
+        self.getMinMaxTime()
 
 
     def zoomToRaster(self):
@@ -381,11 +365,8 @@ class SauberRasterViewer:
         # Only create GUI ONCE in callback, so that it will only load when the plugin is started
         if self.first_start == True:
             self.first_start = False
-            self.dlg = SauberRasterViewerDialog()
-                    
-            self.getRasterLayerCombo()
+            self.dlg = SauberRasterViewerDialog()                  
             self.getCapabilitiesFile()
-            self.getMinMaxTime()
 
         # Zoom to raster btn
         self.dlg.zoom_to_raster.clicked.connect(self.zoomToRaster)
@@ -394,7 +375,7 @@ class SauberRasterViewer:
         self.dlg.show_tempctl_btn.clicked.connect(self.show_temp_control)
 
         # Listen for selection change
-        self.dlg.box_region.activated.connect(self.getMinMaxTime)
+        self.dlg.box_region.activated.connect(self.filterRasterPollutants)
         self.dlg.box_raster_pollutant.activated.connect(self.getMinMaxTime)
 
         # Load layer btn

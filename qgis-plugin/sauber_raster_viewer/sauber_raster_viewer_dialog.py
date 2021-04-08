@@ -22,10 +22,15 @@
  ***************************************************************************/
 """
 
+
+from PyQt5.QtWidgets import QWidget, QPushButton, QHBoxLayout
+
+
 import os
 
 from qgis.PyQt import uic
-from qgis.PyQt import QtWidgets
+from qgis.PyQt import QtWidgets, QtCore
+from qgis.gui import QgsTemporalControllerWidget
 
 # This loads your .ui file so that PyQt can populate your plugin with the elements from Qt Designer
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
@@ -41,4 +46,8 @@ class SauberRasterViewerDialog(QtWidgets.QDialog, FORM_CLASS):
         # self.<objectname>, and you can use autoconnect slots - see
         # http://qt-project.org/doc/qt-4.8/designer-using-a-ui-file.html
         # #widgets-and-dialogs-with-auto-connect
+        self.temporal_controller = QgsTemporalControllerWidget()
+        layout = QHBoxLayout()
+        layout.addWidget(self.temporal_controller, alignment=QtCore.Qt.AlignRight | QtCore.Qt.AlignBottom)
+        self.setLayout(layout)
         self.setupUi(self)

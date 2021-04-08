@@ -2,6 +2,14 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
+import matplotlib.dates as mdates
+import matplotlib.units as munits
+import numpy as np
+import locale
+
+import datetime
+#from datetime import datetime
+
 
 class PlotterCanvas(FigureCanvasQTAgg):
 
@@ -15,7 +23,35 @@ class Plotter(QtWidgets.QMainWindow):
     def __init__(self, *args, **kwargs):
         super(Plotter, self).__init__(*args, **kwargs)
 
-    def plot(self,dataseries):
+    def plot(self,dataseries,station_name,component_name):
+
+        # Replace underscore
+        component_annotation = component_name.replace('_',' ')
+
+        locale.setlocale(locale.LC_ALL, 'de_DE')
+
+        formats = ['%y',          
+                '%b',     
+                '%d',     
+                '%H:%M', 
+                '%H:%M', 
+                '%S.%f', ] 
+        zero_formats = [''] + formats[:-1]
+ 
+        zero_formats[3] = '%d-%b'
+ 
+        offset_formats = ['',
+                        '%Y',
+                        '%b %Y',
+                        '%d %b %Y',
+                        '%d %b %Y',
+                        '%d %b %Y %H:%M', ]
+
+        converter = mdates.ConciseDateConverter(formats=formats, zero_formats=zero_formats, offset_formats=offset_formats)
+
+        munits.registry[np.datetime64] = converter
+        munits.registry[datetime.date] = converter
+        munits.registry[datetime.datetime] = converter
 
         # y-axis: Data series
         ds = ([float(x[1]) for x in dataseries])
@@ -25,7 +61,10 @@ class Plotter(QtWidgets.QMainWindow):
 
         sc = PlotterCanvas(self, width=10, height=5, dpi=200)
         sc.axes.plot(ts, ds)
+        sc.axes.set_title(f'{station_name}: {component_annotation}')
+        sc.axes.grid(axis='both')
 
+        print(station_name, component_name)
         toolbar = NavigationToolbar(sc, self)
 
         layout = QtWidgets.QVBoxLayout()
