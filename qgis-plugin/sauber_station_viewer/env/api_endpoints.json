@@ -1,0 +1,5 @@
+{
+    "station_url": "https://sauber-sdi.meggsimum.de/geoserver/station_data/ows?service=WFS&version=2.0.0&request=GetFeature&typeName=station_data:fv_stations&outputFormat=application/json",
+    "wfs_url": "https://sauber-sdi.meggsimum.de/geoserver/station_data/ows?service=WFS&version=2.0.0&request=GetFeature&typeName=station_data:fv_stations",
+    "wmst_url": "https://sauber-sdi.meggsimum.de/geoserver/image_mosaics/wms&crs=EPSG:25832&format=image/png&layers={0}_{1}&styles&temporalSource=provider&timeDimensionExtent={2}&type=wmst"
+}

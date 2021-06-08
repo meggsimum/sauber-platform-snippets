@@ -34,7 +34,8 @@ from qgis.PyQt.QtWidgets import (
     QAction, 
     QInputDialog, 
     QWidget,
-    QTableWidgetItem
+    QTableWidgetItem,
+    QFileDialog
 )
 
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
@@ -47,13 +48,14 @@ import os.path
 import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 
 # Initialize Qt resources from file resources.py
 from .resources import *
 # Import the code for the dialog
 from .sauber_raster_viewer_dialog import SauberRasterViewerDialog
-
+from qgis.gui import QgsTemporalControllerWidget
+from configparser import ConfigParser
 
 
 class SauberRasterViewer:
@@ -69,6 +71,8 @@ class SauberRasterViewer:
         """
 
         self.station_dict = {}
+
+        self.cwd = os.path.join(os.path.dirname(__file__))
 
         # Save reference to the QGIS interface
         self.iface = iface
@@ -208,6 +212,21 @@ class SauberRasterViewer:
             self.iface.removeToolBarIcon(action)
 
 
+    def getConfig(self):
+        """Find out if config file exists, parse relevant params"""
+
+        config = ConfigParser()
+        config.read(os.path.join(os.path.dirname(__file__),'sauber_config.ini'))
+
+        if config.has_option("endpoints", "wmst_base") and config.has_option("endpoints", "capabilities_url"):
+            endpoints = config["endpoints"]
+            self.wmst_base = endpoints["wmst_base"]
+            self.capabilities_url = endpoints["capabilities_url"]
+        else: 
+            iface.messageBar().pushMessage("Error", "Konfigurationsdatei konnte nicht geladen werden", level=Qgis.Critical, duration=5)
+            self.dlg.close()
+
+
     def checkLayerExists(self,layerSource):
         """
         Check if layer is already loaded to avoid duplicates.
@@ -232,9 +251,8 @@ class SauberRasterViewer:
         layer_name = "{0} {1}".format(curr_region.upper(),curr_pollutant.upper())
         timeframe = self.getMinMaxTime()
 
-        wmst_url = "url=https://sauber-sdi.meggsimum.de/geoserver/image_mosaics/wms&crs=EPSG:25832&dpiMode=7&format=image/png&layers={0}_{1}&styles&temporalSource=provider&timeDimensionExtent={2}&type=wmst".format(curr_region,curr_pollutant,timeframe)            
+        wmst_url = self.wmst_base.format(curr_region,curr_pollutant,timeframe)
         
-        print(wmst_url)
         raster_layer = QgsRasterLayer(wmst_url, layer_name, "WMS")
 
         if self.checkLayerExists(wmst_url):
@@ -252,13 +270,15 @@ class SauberRasterViewer:
         QgsProject.instance().layerTreeRoot().findLayer(layer).setItemVisibilityChecked(True)
 
 
+
     def getCapabilitiesFile(self):
         """ Download getCap File"""
 
-        capabilities_url = "https://sauber-sdi.meggsimum.de/geoserver/image_mosaics/wms?service=WMS&version=1.1.0&request=GetCapabilities"
+        # capabilities_url = "https://sauber-sdi.meggsimum.de/geoserver/image_mosaics/wms?service=WMS&version=1.1.0&request=GetCapabilities"
+        capabilities_url = self.capabilities_url
 
         try:
-            capabilities_response = requests.get(capabilities_url, verify=False)#,auth)) # TODO: Enable auth, enable verifiy
+            capabilities_response = requests.get(capabilities_url, verify=True)
             capabilities_text = capabilities_response.text
         except requests.exceptions.HTTPError as http_err:
             print(f'HTTP error: {http_err}')
@@ -270,13 +290,17 @@ class SauberRasterViewer:
 
         self.getRasterLayerDict(capabilities_root)
 
-
     def getMinMaxTime(self):
         """ Retrieve min and max time for raster mosaic"""
 
         curr_region, curr_pollutant = self.getCurrCombo()
 
-        timeframe = self.raster_dict[curr_region][curr_pollutant]
+        for val in self.raster_dict[curr_region][curr_pollutant]:
+            if not "EPSG" in val: 
+                timeframe = val
+
+#         Iterate over dict in case of Python < 3.6 (unordered dict)
+#         timeframe = self.raster_dict[curr_region][curr_pollutant][0]
 
         min_time = timeframe.split("/")[0]
         max_time = timeframe.split("/")[1]
@@ -293,6 +317,7 @@ class SauberRasterViewer:
     def getRasterLayerDict(self,xml_root):
         """Iterate through getCap XML and create dict of region:pollutants:timeframe""" 
             
+        # self.raster_dict = defaultdict(dict)
         self.raster_dict = defaultdict(dict)
 
         for layer in xml_root.findall("./Capability/Layer/Layer/Name"):
@@ -305,8 +330,12 @@ class SauberRasterViewer:
                 timeframe_txt = timeframe.text
                 # Add to dict
                 self.raster_dict[region].update({pollutant:timeframe_txt})
-        
-        # clear combobox push regions
+
+            for srs in xml_root.findall("./Capability/Layer/Layer[Name='{0}']/SRS".format(lyr_txt)):
+                srs_txt = srs.text
+                self.raster_dict[region].update({pollutant:[timeframe_txt,srs_txt]})
+
+        # clear combobox, then push regions
         self.dlg.box_region.clear()
         for region in self.raster_dict.keys():
             self.dlg.box_region.addItem(region.upper())
@@ -345,13 +374,8 @@ class SauberRasterViewer:
         extent = layer.extent()
         canvas.setExtent(extent)
 
-        #TODO: Use fixed bbox?
-        # scale=1000
-        # rect = QgsRectangle(float(stat_x)-scale,float(stat_y)-scale,float(stat_x)+scale,float(stat_y)+scale)
-        # iface.mapCanvas().setExtent(rect)
-        # iface.mapCanvas().refresh()
 
-    def show_temp_control(self, checked):
+    def show_temp_control(self):
 
         for i in iface.mainWindow().findChildren(QtWidgets.QDockWidget):
             if i.objectName() == 'Temporal Controller':
@@ -365,14 +389,25 @@ class SauberRasterViewer:
         # Only create GUI ONCE in callback, so that it will only load when the plugin is started
         if self.first_start == True:
             self.first_start = False
-            self.dlg = SauberRasterViewerDialog()                  
-            self.getCapabilitiesFile()
+
+            """
+            Show temporal controller itself in widget
+            """
+            # temp_controller = iface.mapCanvas().temporalController() 
+            # iface.mapCanvas().setTemporalController(temp_controller)
+            # self.dlg.verticalLayout_2.addWidget(self.temporal_controller_widget, alignment=QtCore.Qt.AlignRight | QtCore.Qt.AlignBottom)
+
+        self.dlg = SauberRasterViewerDialog()
+        self.getConfig()
+        self.getCapabilitiesFile()
+
+        # Show Temp Controller 
+        self.dlg.show_tempctl_btn.clicked.connect(self.show_temp_control)
+
 
         # Zoom to raster btn
         self.dlg.zoom_to_raster.clicked.connect(self.zoomToRaster)
 
-        # Show Temp Controller 
-        self.dlg.show_tempctl_btn.clicked.connect(self.show_temp_control)
 
         # Listen for selection change
         self.dlg.box_region.activated.connect(self.filterRasterPollutants)

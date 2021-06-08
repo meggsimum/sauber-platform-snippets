@@ -1,4 +1,4 @@
-    # -*- coding: utf-8 -*-
+        # -*- coding: utf-8 -*-
 """
 /***************************************************************************
  SauberStationViewer
@@ -26,7 +26,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtCore import Qt
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
-from qgis.utils import iface
+from qgis.utils import iface,plugins
 
 from qgis.PyQt.QtWidgets import (
     QAction, 
@@ -35,7 +35,8 @@ from qgis.PyQt.QtWidgets import (
     QLabel, 
     QVBoxLayout, 
     QWidget, 
-    QTableWidgetItem
+    QTableWidgetItem,
+    QFileDialog
     )
 
 
@@ -61,27 +62,9 @@ from .resources import *
 # Import the code for the dialog
 from .sauber_station_viewer_dialog import SauberStationViewerDialog
 import os.path
+from configparser import ConfigParser
 
 # from mainwindow import Ui_MainWindow
-
-
-class AnotherWindow(QWidget):
-    """
-    This "window" is a QWidget. If it has no parent,
-    it will appear as a free-floating window.
-    """
-
-    def __init__(self):
-        super().__init__()
-        layout = QVBoxLayout()
-        self.label = QLabel("Graph")
-        layout.addWidget(self.label)
-        self.setLayout(layout)
-
-        for i in iface.mainWindow().findChildren(QtWidgets.QDockWidget):
-            if i.objectName() == 'Temporal Controller':
-                i.setVisible(True)
-#####################################################################################################
 
 class SauberStationViewer:
     """QGIS Plugin Implementation."""
@@ -120,6 +103,7 @@ class SauberStationViewer:
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
         self.first_start = None
+
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -224,7 +208,6 @@ class SauberStationViewer:
         # will be set False in run()
         self.first_start = True
 
-
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
@@ -232,6 +215,47 @@ class SauberStationViewer:
                 self.tr(u'&SAUBER Station Viewer'),
                 action)
             self.iface.removeToolBarIcon(action)
+
+
+    def onClosePlugin(self):
+        """Cleanup necessary items here when plugin dockwidget is closed"""
+        # disconnects
+        self.pluginIsActive = False
+
+
+    def check_connected(self):
+        """
+        Check if connection to Geoserver can be established
+        """
+
+        check = requests.head("http://sauber-sdi.meggsimum.de/geoserver/rest/about/system-status.json")
+        if check.status_code != 200:
+            print(check.status_code)
+            iface.messageBar().pushMessage("Error", "Keine Verbindung mit Server. Verbindung prüfen.", level=Qgis.Critical, duration=4)
+            SystemExit(1)
+
+
+    def getConfig(self):
+        """Find out if config file exists, parse relevant params"""
+
+        # Retrieve fixed endpoints
+        # As they are critical for functioning, check they exist using fixed variables instead of iterating
+        config = ConfigParser()
+        config.read(os.path.join(os.path.dirname(__file__),'sauber_config.ini'))
+
+        if config.has_option("endpoints", "wfs_base") and config.has_option("endpoints", "stations_url"):
+            endpoints = config["endpoints"]
+            self.wfs_base = endpoints["wfs_base"]
+            self.stations_url = endpoints["stations_url"]
+        else: 
+            iface.messageBar().pushMessage("Error", "Konfigurationsdatei konnte nicht geladen werden", level=Qgis.Critical, duration=5)
+            self.dlg.close()
+
+        # Retrieve pollutant dictionary
+        # Optional, iterate all possible units
+        self.pollutant_dict = {}
+        for unit,plain in config.items("pollutants"):
+            self.pollutant_dict[unit] = plain
 
 
     def checkLayerExists(self,layerSource):
@@ -250,15 +274,11 @@ class SauberStationViewer:
 
 
     def loadStationLayer(self,warning=True):
-        """
-        Load measuring station layer.
-        TODO: SSL
-        """
+        """Load measuring station layer into map"""
 
-        wfs_url = "https://sauber-sdi.meggsimum.de/geoserver/station_data/ows?service=WFS&version=2.0.0&request=GetFeature&typeName=station_data:fv_stations"
-        station_layer = QgsVectorLayer(wfs_url, "SAUBER Messstationen", "WFS")
+        station_layer = QgsVectorLayer(self.stations_url, "SAUBER Messstationen", "WFS")
         
-        if self.checkLayerExists(wfs_url):
+        if self.checkLayerExists(self.stations_url):
             if station_layer.isValid():
                 QgsProject.instance().addMapLayer(station_layer)
             else: iface.messageBar().pushMessage("Error", "Layer mit Messstationen konnte nicht geladen werden", level=Qgis.Critical, duration=4)
@@ -291,12 +311,10 @@ class SauberStationViewer:
         station_name = self.dlg.box_station.currentText()
         component_name = self.dlg.box_pollutant.currentText().replace('"', '')
 
-
-        base_url = "https://sauber-sdi.meggsimum.de/geoserver/station_data/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=station_data%3Awfs_parameterized&outputFormat=application%2Fjson"
-        request_url = base_url + "&viewparams=START_DATE:'{}';END_DATE:'{}';STATION_NAME:'{}';COMPONENT_NAME:'{}'".format(start_dt,end_dt,station_name,component_name)
+        request_url = self.wfs_base + "&viewparams=START_DATE:'{}';END_DATE:'{}';STATION_NAME:'{}';COMPONENT_NAME:'{}'".format(start_dt,end_dt,station_name,component_name)
 
         try:
-            request = requests.get(request_url, verify=False)#,auth)) # TODO: Enable auth, TODO: turn on cert verification
+            request = requests.get(request_url, verify=True)
             request.raise_for_status()
             station_data = request.text
         except HTTPError as http_err:
@@ -304,79 +322,82 @@ class SauberStationViewer:
         except Exception as err:
             print(f'Error occurred: {err}')
 
-        # Convert response text into JSON.
-        # Need to check for non-empty feature set
-        # Check for 'val' string .
-        # TODO: This is a pretty weak check.
-
         try: 
-            self.data_dict = json.loads(station_data)
+            data_dict = json.loads(station_data)
         except Exception as err:
             iface.messageBar().pushMessage("Error", "Fehler bei der Datenabfrage", level=Qgis.Critical, duration=4)
             print(f'Error occurred: {err}')
             return
 
-        # Check if there is actually data in the request
-        if len(self.data_dict["features"])>0:
+        # Check if request is empty, else parse
+        if not len(data_dict["features"])>0:
+
+            iface.messageBar().pushMessage("Error", "Keine Daten im Abfragezeitraum", level=Qgis.Critical, duration=4)
+
+        else: 
+            payload = data_dict["features"][0]["properties"]
+
+            unit = payload["unit"]
+            unit_plain = self.pollutant_dict[unit]
 
             # Target data is a JSON within JSON, need to parse again
-            series = json.loads(self.data_dict["features"][0]["properties"]["series"])
+            series = json.loads(payload["series"])
 
             # Simplify from JSON Objects {date: , value:} to list
             # Cast time string to datetime to convert format later 
             data=[]
             for i in series:
-                data.append((datetime.strptime(i["datetime"],"%Y-%m-%dT%H:%M:%S"),(i["val"])))    
-            return data, station_name, component_name
-
-        else:
-            iface.messageBar().pushMessage("Error", "Keine Daten im Abfragezeitraum", level=Qgis.Critical, duration=4)
+                data.append((datetime.datetime.strptime(i["datetime"],"%Y-%m-%dT%H:%M:%S"),(i["val"])))    
+            
+            return data, station_name, component_name, unit_plain
 
 
     def pushToTable(self):
         """Insert data into table wdiget"""
 
-        data_float,station,component = self.loadStationData()
+        self.clearTable()
 
-        # data = tuple((x[0],str(x[1])) for x in data_float)
-        data = tuple((x[0],str(round(x[1],2))) for x in data_float)
+        data_float,station,component,unit_plain = self.loadStationData()
+
+        component_annotation = component.replace('_',' ')
+
+        data = list((x[0],str(round(x[1],2))) for x in data_float)
 
         # Construct table
         qTable = self.dlg.tableWidget
-        qTable.clearContents()
+        qTable.setRowCount(0)
         count_rows = len(data) 
         count_cols = len(data[0])
         qTable.setColumnCount(count_cols)
         qTable.setRowCount(count_rows)
-        qTable.setHorizontalHeaderLabels([u'Zeitpunkt',u'Messwert'])
+        qTable.setHorizontalHeaderLabels([u'Zeitpunkt',u'Letzter Vorhersagewert ({0})'.format(component_annotation)])
 
         # Load into table
         for row in range(count_rows):
-            for column in range(count_cols):
-                if isinstance(data[row][column], datetime):
-                    qTable.setItem(row, column, QTableWidgetItem((data[row][column].strftime('%d.%m.%Y %H:%M'))))
-                else:
-                    qTable.setItem(row, column, QTableWidgetItem((data[row][column])))
+                dt = data[row][0]
+                val = data[row][1]
+                qTable.setItem(row, 0, QTableWidgetItem((dt.strftime('%d.%m.%Y %H:%M'))))
+                qTable.setItem(row, 1, QTableWidgetItem((val + " " + str(unit_plain))))
 
         qTable.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
         qTable.resizeColumnsToContents()
 
 
+    def clearTable(self):
+        self.dlg.tableWidget.clearContents()
+
+
     def getStationLayerCombo(self):
         """Get all stations-component combinations from Geoserver WFS"""
-       
-        stations_url = 'https://sauber-sdi.meggsimum.de/geoserver/station_data/ows?service=WFS&version=2.0.0&request=GetFeature&typeName=station_data:fv_stations&outputFormat=application/json'
 
         try:
-            station_pollutants = requests.get(stations_url)#,auth)) # TODO: Enable auth, TODO: turn on cert verification
-            station_pollutants.raise_for_status()
+            station_pollutants = requests.get(self.stations_url+"&outputFormat=application/json", verify=True)
             station_response = station_pollutants.text
         except HTTPError as http_err:
             print(f'HTTP error: {http_err}')
         except Exception as err:
             print(f'Error occurred: {err}')
 
-#        print(station_pollutants)
         # Parse reponse JSON and load into dict
         self.station_dict = json.loads(station_response)
 
@@ -386,7 +407,6 @@ class SauberStationViewer:
             stations.append(station["properties"]["station_name"]) if station["properties"]["station_name"] not in stations else stations
 
         stations = [x for x in stations if x is not None]
-#        print(stations)
         # Sort for ordering in gui box
         stations.sort()
     
@@ -405,12 +425,15 @@ class SauberStationViewer:
         curr_station = self.dlg.box_station.currentText()
         self.filterPollutants(self.dlg.box_station.currentText())
 
-        return curr_station
+        self.clearTable()
 
+        return curr_station
 
     def getCurrPollutant(self):
         # Listens to signal when pollutant selection is changed in combobox
         curr_pollutant = self.dlg.box_pollutant.currentText()
+        self.clearTable()
+
         return curr_pollutant
 
 
@@ -423,27 +446,25 @@ class SauberStationViewer:
                     # Remove curly brackets and split for insert into second combo box
                     self.dlg.box_pollutant.addItem(j.replace('"',''))
 
-    def zoomToStation(self):
 
+    def panToStation(self,zoom=False):
+        # Load layer quietly if not yet loaded 
         self.loadStationLayer(warning=False)
         curr_station = self.getCurrStation()
         layer = iface.activeLayer()
         layer.removeSelection()
         feature=layer.selectByExpression("\"station_name\"='{0}'".format(curr_station))
         iface.actionZoomToSelected().trigger()
-
-        #TODO: Use fixed bbox?
-        # scale=1000
-        # rect = QgsRectangle(float(stat_x)-scale,float(stat_y)-scale,float(stat_x)+scale,float(stat_y)+scale)
-        # iface.mapCanvas().setExtent(rect)
-        # iface.mapCanvas().refresh()
+        
+        if zoom == True:
+            iface.mapCanvas().zoomScale(1000)
 
 
     def plot(self):
         """Show graph of data. Calls Plotter class"""
-        data,station_name,component_name = self.loadStationData()
+        data,station_name,component_name,unit_plain = self.loadStationData()
         plt_inst = Plotter()
-        plt_inst.plot(data,station_name,component_name)
+        plt_inst.plot(data,station_name,component_name,unit_plain)
 
 
     def run(self):
@@ -453,21 +474,29 @@ class SauberStationViewer:
         # Only create GUI ONCE in callback, so that it will only load when the plugin is started
         if self.first_start == True:
             self.first_start = False
-            self.dlg = SauberStationViewerDialog()
+            self.check_connected()
+
+        self.getConfig()
+
+        # Init dialogue, show on top
+        self.dlg = SauberStationViewerDialog()
+        self.dlg.setWindowFlags(Qt.WindowStaysOnTopHint)
+        self.dlg.show()
 
         # Clear combo boxes
         self.dlg.box_station.clear()
         self.dlg.box_pollutant.clear()
-        # Get initial station+pollutant combo to fill box
 
+        # Get initial station+pollutant combo to fill box
         self.getStationLayerCombo()
 
         # Listen to selection change signal, call function if changed
         self.dlg.box_station.activated.connect(self.getCurrStation)
         self.dlg.box_pollutant.activated.connect(self.getCurrPollutant)
 
-        # Zoom to station btn
-        self.dlg.zoom_to_station.clicked.connect(self.zoomToStation)
+        # Pan, zoom to station btn
+        self.dlg.pan_to_station.clicked.connect(self.panToStation)
+        self.dlg.zoom_to_station.clicked.connect(lambda: self.panToStation(True))
 
         # Load layer btn
         # self.dlg.load_layer_btn.clicked.connect(self.loadStationLayer)
@@ -478,14 +507,3 @@ class SauberStationViewer:
 
         # Plot data
         self.dlg.plot_btn.clicked.connect(self.plot)
-
-        self.dialogs = list()
-
-        # show the dialog
-        self.dlg.show()
-        # Run the dialog event loop
-        result = self.dlg.exec_()
-        # See if OK was pressed 
-
-        if result:
-            self.dlg.close()

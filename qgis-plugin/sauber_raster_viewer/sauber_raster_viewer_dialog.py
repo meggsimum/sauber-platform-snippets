@@ -46,8 +46,4 @@ class SauberRasterViewerDialog(QtWidgets.QDialog, FORM_CLASS):
         # self.<objectname>, and you can use autoconnect slots - see
         # http://qt-project.org/doc/qt-4.8/designer-using-a-ui-file.html
         # #widgets-and-dialogs-with-auto-connect
-        self.temporal_controller = QgsTemporalControllerWidget()
-        layout = QHBoxLayout()
-        layout.addWidget(self.temporal_controller, alignment=QtCore.Qt.AlignRight | QtCore.Qt.AlignBottom)
-        self.setLayout(layout)
         self.setupUi(self)

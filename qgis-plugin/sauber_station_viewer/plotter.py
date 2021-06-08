@@ -8,8 +8,6 @@ import numpy as np
 import locale
 
 import datetime
-#from datetime import datetime
-
 
 class PlotterCanvas(FigureCanvasQTAgg):
 
@@ -23,16 +21,18 @@ class Plotter(QtWidgets.QMainWindow):
     def __init__(self, *args, **kwargs):
         super(Plotter, self).__init__(*args, **kwargs)
 
-    def plot(self,dataseries,station_name,component_name):
+    def plot(self,dataseries,station_name,component_name,unit):
 
         # Replace underscore
         component_annotation = component_name.replace('_',' ')
 
+        # Use German calenadar names
         locale.setlocale(locale.LC_ALL, 'de_DE')
 
-        formats = ['%y',          
-                '%b',     
-                '%d',     
+        # Set Axis tick formats for more intuitive formatting 
+        formats = ['%y', 
+                '%b', 
+                '%d', 
                 '%H:%M', 
                 '%H:%M', 
                 '%S.%f', ] 
@@ -61,10 +61,11 @@ class Plotter(QtWidgets.QMainWindow):
 
         sc = PlotterCanvas(self, width=10, height=5, dpi=200)
         sc.axes.plot(ts, ds)
-        sc.axes.set_title(f'{station_name}: {component_annotation}')
+        sc.axes.set_title(f'{station_name}: {component_annotation} ({unit})')
         sc.axes.grid(axis='both')
 
-        print(station_name, component_name)
+        sc.axes.set_ylabel(unit)
+
         toolbar = NavigationToolbar(sc, self)
 
         layout = QtWidgets.QVBoxLayout()
