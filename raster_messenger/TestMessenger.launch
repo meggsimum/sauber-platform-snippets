@@ -7,10 +7,11 @@
         <listEntry value="1"/>
     </listAttribute>
     <mapAttribute key="org.eclipse.debug.core.environmentVariables">
-        <mapEntry key="testPollutant" value="CO2"/>
-        <mapEntry key="testRegion" value="Heidelberg"/>
-        <mapEntry key="umchannel" value="raster_data"/>
-        <mapEntry key="umserver" value="localhost:9876"/>
+        <mapEntry key="OFFSETHRS" value="5"/>
+        <mapEntry key="TESTPOLLUTANT" value="CO2"/>
+        <mapEntry key="TESTREGION" value="Heidelberg"/>
+        <mapEntry key="UMCHANNEL" value="raster_data"/>
+        <mapEntry key="UMSERVER" value="localhost:9876"/>
     </mapAttribute>
     <booleanAttribute key="org.eclipse.jdt.launching.ATTR_USE_CLASSPATH_ONLY_JAR" value="false"/>
     <booleanAttribute key="org.eclipse.jdt.launching.ATTR_USE_START_ON_FIRST_THREAD" value="true"/>

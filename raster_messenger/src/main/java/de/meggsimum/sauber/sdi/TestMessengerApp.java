@@ -14,11 +14,11 @@ public class TestMessengerApp {
 	public static void main(String[] args) {
 
 		// Universal Messaging protocol, server address and port
-		String umServer = System.getenv("umserver");
-		String umChannel = System.getenv("umchannel");
-		String testRegion = System.getenv("testRegion");
-		String testPollutant = System.getenv("testPollutant");
-		
+		String umServer = System.getenv("UMSERVER");
+		String umChannel = System.getenv("UMCHANNEL");
+		String testRegion = System.getenv("TESTREGION");
+		String testPollutant = System.getenv("TESTPOLLUTANT");
+		Sring offsetHrs = System.getenv("OFFSETHRS");
 
 		System.out.println("Connecting to UM server: " + umServer);
 
@@ -31,7 +31,7 @@ public class TestMessengerApp {
 		String category="areal-forecast";
 
 		// Subscribe to the channel specified
-		mySelf.publish(umUrl, umChannel, testRegion, testPollutant, sourceName, category);
+		mySelf.publish(umUrl, umChannel, offsetHrs, testRegion, testPollutant, sourceName, category);
 				
 	}
 
