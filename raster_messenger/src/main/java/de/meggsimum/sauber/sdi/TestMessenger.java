@@ -22,10 +22,12 @@ import org.json.*;
 
 public class TestMessenger {
 		
-		public void publish(String[] rname, String chname, String testRegion, String testPollutant, String sourcename, String category) {
+		public void publish(String[] rname, String chname, String offsetHrs, String testRegion, String testPollutant, String sourcename, String category) {
 		
 			// Get the timestamp
-			Long currTime = System.currentTimeMillis()/1000;
+			Integer offsetInt = Integer.parseInt(offsetHrs);
+			Integer offsetSeconds = offsetInt*3600;
+			Long currTime = System.currentTimeMillis()/1000+offsetInt;
 			Long plusOneHr = currTime + 3600;
 			Long plusTwoHr = plusOneHr + 3600;		
 			nSessionAttributes nsa;
