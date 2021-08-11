@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="de" > <![endif]-->
+<!--[if gt IE 8]><!-->
+<html class="no-js" lang="de">
+<!--<![endif]-->
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Einbindung SAUBER Endpunkte</title>
+  <script type="text/javascript" src="_static/js/theme.js"></script>
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+  <link rel="index" title="Stichwortverzeichnis" href="genindex.html" />
+  <link rel="search" title="Suche" href="search.html" />
+</head>
+
+<body class="wy-body-for-nav">
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          <a href="#" class="icon icon-home"> Einbindung SAUBER Endpunkte
+          </a>
+        </div>
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          <!-- Local TOC -->
+          <div class="local-toc"></div>
+        </div>
+      </div>
+    </nav>
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="#">Einbindung SAUBER Endpunkte</a>
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+            <ul class="wy-breadcrumbs">
+              <li><a href="#">Docs</a> &raquo;</li>
+              <li>Einbindung SAUBER Endpunkte</li>
+              <li class="wy-breadcrumbs-aside">
+              </li>
+            </ul>
+            <hr />
+          </div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div itemprop="articleBody">
+              <div class="section" id="einbindung-von-sauber-in-desktop-gis">
+                <h1>Einbindung von SAUBER in Desktop-GIS<a class="headerlink"
+                    href="#einbindung-von-sauber-in-desktop-gis" title="Link zu dieser Überschrift">¶</a></h1>
+                <div class="section" id="endpunkte">
+                  <h2>Endpunkte<a class="headerlink" href="#endpunkte" title="Link zu dieser Überschrift">¶</a></h2>
+                  <blockquote>
+                    <div>
+                      <p>Die SAUBER-Plattform stellt Endpunkte zum Export von Geodaten in OGC-kompatiblem Format bereit,
+                        welche in gängige Desktop-GIS-Anwendungen eingunden werden können.</p>
+                      <p>Die Raster-Vorhersagedaten werden als WebFeatureService (WFS) bereitgestellt. Die URL des
+                        SAUBER-WFS lautet
+                        <a class="reference external"
+                          href="https://sauber-sdi.meggsimum.de/geoserver/image_mosaics/wms">https://sauber-sdi.meggsimum.de/geoserver/image_mosaics/wms</a>
+                      </p>
+                    </div>
+                  </blockquote>
+                </div>
+                <div class="section" id="einbindung-in-desktop-gis-anwendung">
+                  <h2>Einbindung in Desktop-GIS-Anwendung<a class="headerlink"
+                      href="#einbindung-in-desktop-gis-anwendung" title="Link zu dieser Überschrift">¶</a></h2>
+                  <blockquote>
+                    <div>
+                      <p>Die oben genannten Endpunkte können in alle gängigen Desktop-GIS Anwendungen eingebettet werden
+                      </p>
+                    </div>
+                  </blockquote>
+                  <div class="section" id="arcgis">
+                    <h3>ArcGIS<a class="headerlink" href="#arcgis" title="Link zu dieser Überschrift">¶</a></h3>
+                    <blockquote>
+                      <div>
+                        <p>In ESRI ArcMAP lässt sich der SAUBER-WMS-Dienst hinzufügen, indem im Arc-Catalog Reiter
+                          „GIS-Servers“ eine neue Verbindung zu einem
+                          WMS-Server konfiguriert wird.</p>
+                        <p><a class="reference internal" href="_images/arcmap_cat.png"><img alt="arcmap_cat"
+                              src="_images/arcmap_cat.png" style="width: 266.0px; height: 345.5px;" /></a></p>
+                        <p>Per Doppelklick auf „Add WMS-Server“ öffnet sich der untenstehende Dialog.</p>
+                        <p>In der folgenden Maske wird die Adresse des SAUBER-WMS-Dienstes eingeben. Per Klick auf „Get
+                          Layers“ werden die
+                          im SAUBER verfügbaren Ebenen angezeigt. Nach der Bestätigung sind diese als Ebenen im
+                          Arc-Catalog verfügbar und können
+                          einzeln der Karte hinzugefügt werden.</p>
+                        <p><a class="reference internal" href="_images/arcmap_mask.png"><img alt="arcmap_mask"
+                              src="_images/arcmap_mask.png" style="width: 492.0px; height: 541.0px;" /></a></p>
+                        <p>Einrichtung des WMS-Dienstes in ArcMap</p>
+                      </div>
+                    </blockquote>
+                  </div>
+                  <div class="section" id="qgis">
+                    <h3>QGIS<a class="headerlink" href="#qgis" title="Link zu dieser Überschrift">¶</a></h3>
+                    <blockquote>
+                      <div>
+                        <p>QGIS erlaubt das Hinzufügen von WMS-Layern im <em>Browser</em>-Fenster, per Rechtsklick auf
+                          WMS/WMTS &gt; New Connection.</p>
+                        <p><a class="reference internal" href="_images/qgis_browser.png"><img alt="qgis_browser"
+                              src="_images/qgis_browser.png" style="width: 247.0px; height: 402.5px;" /></a></p>
+                        <p>Es öffnet sich ein Dialog, in welchem der Name der Verbindung (frei wählbar) und die obige
+                          URL des WMS-Endpunktes eingeben wird.</p>
+                        <p><a class="reference internal" href="_images/qgis_wms.png"><img alt="qgis_wms"
+                              src="_images/qgis_wms.png" style="width: 627.0px; height: 469.0px;" /></a></p>
+                        <p>Nach erfolgreicher Verbindung erscheint die WMS-Verbindung unter dem gewählten Namen in der
+                          Schaltfläche WMS/WMTS.</p>
+                      </div>
+                    </blockquote>
+                    <p><br /></p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</body>
+
+</html>
